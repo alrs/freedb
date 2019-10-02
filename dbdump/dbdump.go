@@ -1,6 +1,7 @@
 package dbdump
 
 import (
+	"bufio"
 	"io"
 	"regexp"
 	"strconv"
@@ -14,7 +15,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	parseOffsetRxp, err = regexp.Compile("[0-9]")
+	parseOffsetRxp, err = regexp.Compile("[0-9]+$")
 	if err != nil {
 		panic(err)
 	}
@@ -30,6 +31,17 @@ func parseOffset(line string) (uint32, error) {
 }
 
 func collectOffsets(db io.Reader) ([]uint32, error) {
-	var err error
-	return []uint32{}, err
+	// 20 tracks should suffice in most cases
+	offsets := make([]uint32, 0, 20)
+	scanner := bufio.NewScanner(db)
+	for scanner.Scan() {
+		if findOffsetRxp.Match([]byte(scanner.Text())) {
+			found, err := parseOffset(scanner.Text())
+			if err != nil {
+				return offsets, err
+			}
+			offsets = append(offsets, uint32(found))
+		}
+	}
+	return offsets, nil
 }
