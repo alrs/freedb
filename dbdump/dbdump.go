@@ -7,7 +7,20 @@ import (
 	"strconv"
 )
 
-var findOffsetRxp, parseOffsetRxp *regexp.Regexp
+var (
+	findOffsetRxp,
+	parseOffsetRxp,
+	findLengthRxp,
+	parseLengthRxp,
+	discIDRxp,
+	discTitleRxp,
+	discYearRxp,
+	discGenreRxp,
+	trackTitleRxp,
+	extendedRxp,
+	extendedTitleRxp,
+	playorderRxp *regexp.Regexp
+)
 
 func init() {
 	var err error
@@ -16,6 +29,38 @@ func init() {
 		panic(err)
 	}
 	parseOffsetRxp, err = regexp.Compile("[0-9]+$")
+	if err != nil {
+		panic(err)
+	}
+	discIDRxp, err = regexp.Compile(`^DISCID=`)
+	if err != nil {
+		panic(err)
+	}
+	discTitleRxp, err = regexp.Compile(`^DTITLE=`)
+	if err != nil {
+		panic(err)
+	}
+	discYearRxp, err = regexp.Compile(`^DYEAR=`)
+	if err != nil {
+		panic(err)
+	}
+	discGenreRxp, err = regexp.Compile(`^DGENRE=`)
+	if err != nil {
+		panic(err)
+	}
+	trackTitleRxp, err = regexp.Compile(`^TTITLE[0-9]+=`)
+	if err != nil {
+		panic(err)
+	}
+	extendedTitleRxp, err = regexp.Compile(`^EXTT[0-9]+=`)
+	if err != nil {
+		panic(err)
+	}
+	extendedRxp, err = regexp.Compile(`^EXTD=`)
+	if err != nil {
+		panic(err)
+	}
+	playorderRxp, err = regexp.Compile(`^PLAYORDER=`)
 	if err != nil {
 		panic(err)
 	}
