@@ -1,0 +1,48 @@
+# xmcd CD database file
+# Copyright (C) 1993-1996 Ti Kan
+#
+# Track frame offsets:
+#	150
+#	12860
+#	23460
+#	37067
+#	54250
+#	70892
+#	90637
+#	107507
+#	124742
+#	139870
+#
+# Disc length: 2059 seconds
+#
+# Revision: 1
+# Processed by: cddbd v1.4b41PL1 Copyright (c) Steve Scherf et al.
+# Submitted via: CDValet v3.31 - Copyright (c) 1997 Greg Leichner
+#
+DISCID=7908090a
+DTITLE=Gladys Knight & The Pips / All The Greatest Hits
+DYEAR=
+DGENRE=
+TTITLE0=I Heard It Through The Grapevine
+TTITLE1=The End Of Our Road
+TTITLE2=The Nitty Gritty
+TTITLE3=Friendship Train
+TTITLE4=You Need Love Like I Do (Don't You?)
+TTITLE5=Neither One Of Us (Wants To Be The First To Say Goodbye
+TTITLE5=)
+TTITLE6=Daddy Could Swear, I Declare
+TTITLE7=Make Me The Woman That You Go Home To
+TTITLE8=I Don't Want To Do Wrong
+TTITLE9=If I Were Your Woman
+EXTD=
+EXTT0=
+EXTT1=
+EXTT2=
+EXTT3=
+EXTT4=
+EXTT5=
+EXTT6=
+EXTT7=
+EXTT8=
+EXTT9=
+PLAYORDER=
