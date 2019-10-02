@@ -3,9 +3,11 @@ package dbdump
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -24,6 +26,8 @@ var (
 	parseDiscLengthRxp,
 	playorderRxp *regexp.Regexp
 )
+
+type pair [2]string
 
 func init() {
 	var err error
@@ -77,6 +81,14 @@ func init() {
 	}
 }
 
+func (p *pair) key() string {
+	return p[0]
+}
+
+func (p *pair) value() string {
+	return p[1]
+}
+
 func parseOffset(line string) (uint32, error) {
 	foundChars := parseOffsetRxp.Find([]byte(line))
 	found, err := strconv.Atoi(string(foundChars))
@@ -115,4 +127,14 @@ func collectDiscLength(db io.Reader) (uint16, error) {
 		}
 	}
 	return 0, errors.New("no disc length found")
+}
+
+func parsePair(line string) (pair, error) {
+	splitPair := strings.Split(line, "=")
+	if len(splitPair) != 2 {
+		return pair{}, fmt.Errorf("%s is not a key-value pair", line)
+	}
+	var kv pair
+	copy(kv[:], splitPair[:2])
+	return kv, nil
 }

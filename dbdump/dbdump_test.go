@@ -60,3 +60,29 @@ func TestCollectDiscLength(t *testing.T) {
 	}
 	t.Logf(logTmpl, expected, length)
 }
+
+func TestParsePair(t *testing.T) {
+	testPair := "key=value"
+	kv, err := parsePair(testPair)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logTmpl := "expected:%s got:%s"
+	expected := pair{"key", "value"}
+	if !reflect.DeepEqual(kv, expected) {
+		t.Fatalf(logTmpl, expected, kv)
+	}
+	t.Logf(logTmpl, expected, kv)
+
+	expectedKey := "key"
+	if kv.key() != expectedKey {
+		t.Fatalf(logTmpl, expectedKey, kv.key())
+	}
+	t.Logf(logTmpl, expectedKey, kv.key())
+
+	expectedValue := "value"
+	if kv.value() != expectedValue {
+		t.Fatalf(logTmpl, expectedValue, kv.value())
+	}
+	t.Logf(logTmpl, expectedValue, kv.value())
+}
