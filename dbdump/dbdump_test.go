@@ -43,3 +43,20 @@ func TestCollectOffsets(t *testing.T) {
 	}
 	t.Logf(logTmpl, expected, offsets)
 }
+
+func TestCollectDiscLength(t *testing.T) {
+	f, err := os.Open("7908090a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	length, err := collectDiscLength(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := uint16(2059)
+	logTmpl := "expected:%d got:%d"
+	if expected != length {
+		t.Fatalf(logTmpl, expected, length)
+	}
+	t.Logf(logTmpl, expected, length)
+}

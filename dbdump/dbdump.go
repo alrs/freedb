@@ -2,6 +2,7 @@ package dbdump
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"regexp"
 	"strconv"
@@ -19,6 +20,8 @@ var (
 	trackTitleRxp,
 	extendedRxp,
 	extendedTitleRxp,
+	findDiscLengthRxp,
+	parseDiscLengthRxp,
 	playorderRxp *regexp.Regexp
 )
 
@@ -64,6 +67,14 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	findDiscLengthRxp, err = regexp.Compile(`^#\sDisc\slength\:\s[0-9]+\sseconds$`)
+	if err != nil {
+		panic(err)
+	}
+	parseDiscLengthRxp, err = regexp.Compile(`[0-9]+`)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func parseOffset(line string) (uint32, error) {
@@ -89,4 +100,19 @@ func collectOffsets(db io.Reader) ([]uint32, error) {
 		}
 	}
 	return offsets, nil
+}
+
+func collectDiscLength(db io.Reader) (uint16, error) {
+	scanner := bufio.NewScanner(db)
+	for scanner.Scan() {
+		if findDiscLengthRxp.Match([]byte(scanner.Text())) {
+			found := parseDiscLengthRxp.Find([]byte(scanner.Text()))
+			intFound, err := strconv.Atoi(string(found))
+			if err != nil {
+				return 0, err
+			}
+			return uint16(intFound), nil
+		}
+	}
+	return 0, errors.New("no disc length found")
 }
