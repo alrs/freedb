@@ -4,6 +4,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestParseOffset(t *testing.T) {
@@ -85,4 +87,30 @@ func TestParsePair(t *testing.T) {
 		t.Fatalf(logTmpl, expectedValue, kv.value())
 	}
 	t.Logf(logTmpl, expectedValue, kv.value())
+}
+
+func TestExtractPosNumber(t *testing.T) {
+	test := "SOMETHING3"
+	expected := 3
+	got, err := extractPosNum(test)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logTmpl := "expected:%d got:%d"
+	if expected != got {
+		t.Fatalf(logTmpl, expected, got)
+	}
+	t.Logf(logTmpl, expected, got)
+}
+
+func TestCollectTracks(t *testing.T) {
+	f, err := os.Open("7908090a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracks, err := collectTracks(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(spew.Sdump(tracks))
 }

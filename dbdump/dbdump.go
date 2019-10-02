@@ -24,7 +24,8 @@ var (
 	extendedTitleRxp,
 	findDiscLengthRxp,
 	parseDiscLengthRxp,
-	playorderRxp *regexp.Regexp
+	playorderRxp,
+	posNumRxp *regexp.Regexp
 )
 
 type pair [2]string
@@ -76,6 +77,10 @@ func init() {
 		panic(err)
 	}
 	parseDiscLengthRxp, err = regexp.Compile(`[0-9]+`)
+	if err != nil {
+		panic(err)
+	}
+	posNumRxp, err = regexp.Compile(`[0-9]+`)
 	if err != nil {
 		panic(err)
 	}
@@ -137,4 +142,45 @@ func parsePair(line string) (pair, error) {
 	var kv pair
 	copy(kv[:], splitPair[:2])
 	return kv, nil
+}
+
+func collectTracks(db io.Reader) ([]string, error) {
+	var highPos int
+	trackPairs := make([]pair, 0, 20)
+	scanner := bufio.NewScanner(db)
+	for scanner.Scan() {
+		if trackTitleRxp.Match([]byte(scanner.Text())) {
+			kv, err := parsePair(scanner.Text())
+			if err != nil {
+				return []string{}, err
+			}
+			trackPairs = append(trackPairs, kv)
+			pos, err := extractPosNum(kv.key())
+			if err != nil {
+				return []string{}, err
+			}
+			if pos > highPos {
+				highPos = pos
+			}
+		}
+	}
+	tracks := make([]string, highPos+1)
+	for _, tp := range trackPairs {
+		pos, err := extractPosNum(tp.key())
+		if err != nil {
+			return tracks, err
+		}
+		tracks[pos] = tracks[pos] + tp.value()
+	}
+	return tracks, nil
+}
+
+func extractPosNum(key string) (int, error) {
+	// key values can span multiple lines that share
+	// identical keys
+	posFound := posNumRxp.Find([]byte(key))
+	if len(posFound) == 0 {
+		return 0, fmt.Errorf("value %s has no position number.", key)
+	}
+	return strconv.Atoi(string(posFound))
 }
