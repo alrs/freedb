@@ -2,7 +2,6 @@ package dbdump
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -25,10 +24,23 @@ var (
 	findDiscLengthRxp,
 	parseDiscLengthRxp,
 	playorderRxp,
-	numRxp *regexp.Regexp
+	numRxp,
+	filetypeRxp *regexp.Regexp
 )
 
 type pair [2]string
+
+// probably should move this to parent package
+type Disc struct {
+	ID          string
+	Title       string
+	Genre       string
+	Year        *uint16
+	Offsets     []uint32
+	Duration    uint16
+	Tracks      []string
+	ParseErrors []error
+}
 
 func init() {
 	var err error
@@ -84,6 +96,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	filetypeRxp, err = regexp.Compile(`^#\sxmcd`)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (p *pair) key() string {
@@ -103,37 +119,6 @@ func parseOffset(line string) (uint32, error) {
 	return uint32(found), err
 }
 
-func collectOffsets(db io.Reader) ([]uint32, error) {
-	// 20 tracks should suffice in most cases
-	offsets := make([]uint32, 0, 20)
-	scanner := bufio.NewScanner(db)
-	for scanner.Scan() {
-		if findOffsetRxp.Match([]byte(scanner.Text())) {
-			found, err := parseOffset(scanner.Text())
-			if err != nil {
-				return offsets, err
-			}
-			offsets = append(offsets, uint32(found))
-		}
-	}
-	return offsets, nil
-}
-
-func collectDiscLength(db io.Reader) (uint16, error) {
-	scanner := bufio.NewScanner(db)
-	for scanner.Scan() {
-		if findDiscLengthRxp.Match([]byte(scanner.Text())) {
-			found := parseDiscLengthRxp.Find([]byte(scanner.Text()))
-			intFound, err := strconv.Atoi(string(found))
-			if err != nil {
-				return 0, err
-			}
-			return uint16(intFound), nil
-		}
-	}
-	return 0, errors.New("no disc length found")
-}
-
 func parsePair(line string) (pair, error) {
 	splitPair := strings.Split(line, "=")
 	if len(splitPair) != 2 {
@@ -142,37 +127,6 @@ func parsePair(line string) (pair, error) {
 	var kv pair
 	copy(kv[:], splitPair[:2])
 	return kv, nil
-}
-
-func collectTracks(db io.Reader) ([]string, error) {
-	var highPos int
-	trackPairs := make([]pair, 0, 20)
-	scanner := bufio.NewScanner(db)
-	for scanner.Scan() {
-		if trackTitleRxp.Match([]byte(scanner.Text())) {
-			kv, err := parsePair(scanner.Text())
-			if err != nil {
-				return []string{}, err
-			}
-			trackPairs = append(trackPairs, kv)
-			pos, err := extractPosNum(kv.key())
-			if err != nil {
-				return []string{}, err
-			}
-			if pos > highPos {
-				highPos = pos
-			}
-		}
-	}
-	tracks := make([]string, highPos+1)
-	for _, tp := range trackPairs {
-		pos, err := extractPosNum(tp.key())
-		if err != nil {
-			return tracks, err
-		}
-		tracks[pos] = tracks[pos] + tp.value()
-	}
-	return tracks, nil
 }
 
 func extractPosNum(key string) (int, error) {
@@ -185,20 +139,79 @@ func extractPosNum(key string) (int, error) {
 	return strconv.Atoi(string(posFound))
 }
 
-func collectDiscYear(db io.Reader) (uint16, error) {
-	scanner := bufio.NewScanner(db)
+func parseDump(dump io.Reader) *Disc {
+	disc := Disc{}
+	disc.Offsets = make([]uint32, 0, 20)
+	disc.ParseErrors = make([]error, 0)
+
+	scanner := bufio.NewScanner(dump)
+	scanner.Scan()
+	// first line should identify the xmcd filetype
+	if !filetypeRxp.Match([]byte(scanner.Text())) {
+		disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("not an xmcd dump file"))
+	}
 	for scanner.Scan() {
-		if discYearRxp.Match([]byte(scanner.Text())) {
+		if findOffsetRxp.Match([]byte(scanner.Text())) {
+			// collect offset
+			found, err := parseOffset(scanner.Text())
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("error parsing offset: %s", err))
+			}
+			disc.Offsets = append(disc.Offsets, uint32(found))
+		} else if findDiscLengthRxp.Match([]byte(scanner.Text())) {
+			// collect duration
+			found := parseDiscLengthRxp.Find([]byte(scanner.Text()))
+			intFound, err := strconv.Atoi(string(found))
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, err)
+			}
+			disc.Duration = uint16(intFound)
+		} else if discIDRxp.Match([]byte(scanner.Text())) {
+			// collect disc ID
 			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				return 0, err
+				disc.ParseErrors = append(disc.ParseErrors, err)
 			}
-			val, err := strconv.Atoi(kv.value())
+			disc.ID = kv.value()
+		} else if discTitleRxp.Match([]byte(scanner.Text())) {
+			// collect disc title
+			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				return 0, err
+				disc.ParseErrors = append(disc.ParseErrors, err)
 			}
-			return uint16(val), err
+			disc.Title = kv.value()
+		} else if trackTitleRxp.Match([]byte(scanner.Text())) {
+			// collect track title
+			kv, err := parsePair(scanner.Text())
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, err)
+			}
+			pos, err := extractPosNum(kv.key())
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, err)
+			}
+			if len(disc.Tracks) < (pos + 1) {
+				disc.Tracks = append(disc.Tracks, kv.value())
+			} else {
+				disc.Tracks[pos] = disc.Tracks[pos] + kv.value()
+			}
+		} else if discYearRxp.Match([]byte(scanner.Text())) {
+			// collect year
+			found := numRxp.Find([]byte(scanner.Text()))
+			year, err := strconv.Atoi(string(found))
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, err)
+			}
+			castYear := uint16(year)
+			disc.Year = &castYear
+		} else if discGenreRxp.Match([]byte(scanner.Text())) {
+			// collect genre
+			kv, err := parsePair(scanner.Text())
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, err)
+			}
+			disc.Genre = kv.value()
 		}
 	}
-	return 0, nil
+	return &disc
 }
