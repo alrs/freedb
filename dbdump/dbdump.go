@@ -25,7 +25,7 @@ var (
 	findDiscLengthRxp,
 	parseDiscLengthRxp,
 	playorderRxp,
-	posNumRxp *regexp.Regexp
+	numRxp *regexp.Regexp
 )
 
 type pair [2]string
@@ -80,7 +80,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	posNumRxp, err = regexp.Compile(`[0-9]+`)
+	numRxp, err = regexp.Compile(`[0-9]+`)
 	if err != nil {
 		panic(err)
 	}
@@ -178,9 +178,27 @@ func collectTracks(db io.Reader) ([]string, error) {
 func extractPosNum(key string) (int, error) {
 	// key values can span multiple lines that share
 	// identical keys
-	posFound := posNumRxp.Find([]byte(key))
+	posFound := numRxp.Find([]byte(key))
 	if len(posFound) == 0 {
 		return 0, fmt.Errorf("value %s has no position number.", key)
 	}
 	return strconv.Atoi(string(posFound))
+}
+
+func collectDiscYear(db io.Reader) (uint16, error) {
+	scanner := bufio.NewScanner(db)
+	for scanner.Scan() {
+		if discYearRxp.Match([]byte(scanner.Text())) {
+			kv, err := parsePair(scanner.Text())
+			if err != nil {
+				return 0, err
+			}
+			val, err := strconv.Atoi(kv.value())
+			if err != nil {
+				return 0, err
+			}
+			return uint16(val), err
+		}
+	}
+	return 0, nil
 }

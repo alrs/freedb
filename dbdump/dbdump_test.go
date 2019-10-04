@@ -114,3 +114,20 @@ func TestCollectTracks(t *testing.T) {
 	}
 	t.Log(spew.Sdump(tracks))
 }
+
+func TestCollectDiscYear(t *testing.T) {
+	f, err := os.Open("7908090a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	year, err := collectDiscYear(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := uint16(1988)
+	logTmpl := "expected:%d got:%d"
+	if expected != year {
+		t.Fatalf(logTmpl, expected, year)
+	}
+	t.Logf(logTmpl, expected, year)
+}
