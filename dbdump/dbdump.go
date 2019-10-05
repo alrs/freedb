@@ -7,13 +7,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/alrs/freedb"
 )
 
 var (
 	findOffsetRxp,
 	parseOffsetRxp,
-	findLengthRxp,
-	parseLengthRxp,
 	discIDRxp,
 	discTitleRxp,
 	discYearRxp,
@@ -29,18 +29,6 @@ var (
 )
 
 type pair [2]string
-
-// probably should move this to parent package
-type Disc struct {
-	ID          string
-	Title       string
-	Genre       string
-	Year        *uint16
-	Offsets     []uint32
-	Duration    uint16
-	Tracks      []string
-	ParseErrors []error
-}
 
 func init() {
 	var err error
@@ -134,13 +122,13 @@ func extractPosNum(key string) (int, error) {
 	// identical keys
 	posFound := numRxp.Find([]byte(key))
 	if len(posFound) == 0 {
-		return 0, fmt.Errorf("value %s has no position number.", key)
+		return 0, fmt.Errorf("value %s has no position number", key)
 	}
 	return strconv.Atoi(string(posFound))
 }
 
-func parseDump(dump io.Reader) *Disc {
-	disc := Disc{}
+func parseDump(dump io.Reader) *freedb.Disc {
+	disc := freedb.Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.ParseErrors = make([]error, 0)
 
@@ -149,6 +137,7 @@ func parseDump(dump io.Reader) *Disc {
 	// first line should identify the xmcd filetype
 	if !filetypeRxp.Match([]byte(scanner.Text())) {
 		disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("not an xmcd dump file"))
+		return &disc
 	}
 	for scanner.Scan() {
 		if findOffsetRxp.Match([]byte(scanner.Text())) {
