@@ -108,8 +108,8 @@ func parseOffset(line string) (uint32, error) {
 }
 
 func parsePair(line string) (pair, error) {
-	splitPair := strings.Split(line, "=")
-	if len(splitPair) != 2 {
+	splitPair := strings.SplitN(line, "=", 2)
+	if len(splitPair) < 2 {
 		return pair{}, fmt.Errorf("%s is not a key-value pair", line)
 	}
 	var kv pair
@@ -118,8 +118,6 @@ func parsePair(line string) (pair, error) {
 }
 
 func extractPosNum(key string) (int, error) {
-	// key values can span multiple lines that share
-	// identical keys
 	posFound := numRxp.Find([]byte(key))
 	if len(posFound) == 0 {
 		return 0, fmt.Errorf("value %s has no position number", key)
@@ -127,7 +125,9 @@ func extractPosNum(key string) (int, error) {
 	return strconv.Atoi(string(posFound))
 }
 
-func parseDump(dump io.Reader) *freedb.Disc {
+// ParseDump reads a freedb dump file, parses it, and returns the parsed
+// data into a *freedb.Disc.
+func ParseDump(dump io.Reader) *freedb.Disc {
 	disc := freedb.Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.ParseErrors = make([]error, 0)
@@ -168,7 +168,7 @@ func parseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.ParseErrors = append(disc.ParseErrors, err)
 			}
-			disc.Title = kv.value()
+			disc.Title = disc.Title + kv.value()
 		} else if trackTitleRxp.Match([]byte(scanner.Text())) {
 			// collect track title
 			kv, err := parsePair(scanner.Text())
@@ -187,6 +187,9 @@ func parseDump(dump io.Reader) *freedb.Disc {
 		} else if discYearRxp.Match([]byte(scanner.Text())) {
 			// collect year
 			found := numRxp.Find([]byte(scanner.Text()))
+			if string(found) == "" {
+				continue
+			}
 			year, err := strconv.Atoi(string(found))
 			if err != nil {
 				disc.ParseErrors = append(disc.ParseErrors, err)

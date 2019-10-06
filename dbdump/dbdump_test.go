@@ -62,7 +62,7 @@ func TestParseDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disc := parseDump(f)
+	disc := ParseDump(f)
 	if err != nil {
 		t.Fatal(err)
 	}
