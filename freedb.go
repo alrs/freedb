@@ -1,5 +1,10 @@
-// freedb.org
+// freedb.org Parse, Validate, and insert into PostgreSQL.
 package freedb
+
+import (
+	"fmt"
+	"strings"
+)
 
 // Disc represents the parsed output of a freeDB dump
 type Disc struct {
@@ -30,4 +35,32 @@ type Disc struct {
 	// ParseErrors are all of the errors accumulated during parsing of a dump
 	// file.
 	ParseErrors []error
+}
+
+// AppendErr appends a parsing error to a Disc and returns the number of
+// collected errors on the Disc object.
+func (d *Disc) AppendErr(err error) int {
+	d.ParseErrors = append(d.ParseErrors, err)
+	return len(d.ParseErrors)
+}
+
+// AppendTitle appends to the string that represents the compact disc title,
+// ensuring that the string is valid UTF8.
+func (d *Disc) AppendTitle(s string) {
+	d.Title = d.Title + strings.ToValidUTF8(s, "")
+}
+
+// AppendTrack appends to the track title in the given slice position,
+// ensuring that the string is valid UTF8.
+func (d *Disc) AppendTrack(s string, pos int) error {
+	switch {
+	case len(d.Tracks) == pos:
+		d.Tracks = append(d.Tracks, strings.ToValidUTF8(s, ""))
+	case len(d.Tracks) == pos+1:
+		d.Tracks[pos] = d.Tracks[pos] + strings.ToValidUTF8(s, "")
+	default:
+		return fmt.Errorf("attempted to append position %d to %d length slice",
+			pos, len(d.Tracks))
+	}
+	return nil
 }
