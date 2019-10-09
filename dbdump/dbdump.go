@@ -21,13 +21,14 @@ var (
 	discYearRxp,
 	discGenreRxp,
 	trackTitleRxp,
-	extendedRxp,
-	extendedTitleRxp,
 	findDiscLengthRxp,
 	parseDiscLengthRxp,
-	playorderRxp,
 	numRxp,
-	filetypeRxp *regexp.Regexp
+	filetypeRxp,
+	// TODO
+	extendedTitleRxp,
+	playorderRxp,
+	extendedRxp *regexp.Regexp
 )
 
 type pair [2]string
@@ -136,14 +137,14 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 
 	decoded, err := charset.NewReader(dump, "")
 	if err != nil {
-		disc.ParseErrors = append(disc.ParseErrors, err)
+		disc.AppendErr(err)
 		return &disc
 	}
 	scanner := bufio.NewScanner(decoded)
 	scanner.Scan()
 	// first line should identify the xmcd filetype
 	if !filetypeRxp.Match([]byte(scanner.Text())) {
-		disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("not an xmcd dump file"))
+		disc.AppendErr(fmt.Errorf("not an xmcd dump file"))
 		return &disc
 	}
 	for scanner.Scan() {
@@ -152,7 +153,7 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			// collect offset
 			found, err := parseOffset(scanner.Text())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("error parsing offset: %s", err))
+				disc.AppendErr(fmt.Errorf("error parsing offset: %s", err))
 			} else {
 				disc.Offsets = append(disc.Offsets, uint32(found))
 			}
@@ -161,38 +162,38 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			found := parseDiscLengthRxp.Find([]byte(scanner.Text()))
 			intFound, err := strconv.Atoi(string(found))
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			disc.Duration = uint16(intFound)
 		case discIDRxp.Match([]byte(scanner.Text())):
 			// collect disc ID
 			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			if len(kv.value()) < 8 {
-				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("discID too short"))
+				disc.AppendErr(fmt.Errorf("discID too short"))
 			}
 			disc.ID, err = hex.DecodeString(kv.value()[0:8])
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("error decoding id to hex: %s", err))
+				disc.AppendErr(fmt.Errorf("error decoding id to hex: %s", err))
 			}
 		case discTitleRxp.Match([]byte(scanner.Text())):
 			// collect disc title
 			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			disc.Title = disc.Title + kv.value()
 		case trackTitleRxp.Match([]byte(scanner.Text())):
 			// collect track title
 			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			pos, err := extractPosNum(kv.key())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			if len(disc.Tracks) < (pos + 1) {
 				disc.Tracks = append(disc.Tracks, kv.value())
@@ -207,7 +208,7 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			}
 			year, err := strconv.Atoi(string(found))
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			castYear := uint16(year)
 			disc.Year = &castYear
@@ -215,7 +216,7 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			// collect genre
 			kv, err := parsePair(scanner.Text())
 			if err != nil {
-				disc.ParseErrors = append(disc.ParseErrors, err)
+				disc.AppendErr(err)
 			}
 			genre := kv.value()
 			if genre != "" {

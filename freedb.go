@@ -31,3 +31,10 @@ type Disc struct {
 	// file.
 	ParseErrors []error
 }
+
+// AppendErr appends a parsing error to a Disc and returns the number of
+// collected errors on the Disc object.
+func (d *Disc) AppendErr(err error) int {
+	d.ParseErrors = append(d.ParseErrors, err)
+	return len(d.ParseErrors)
+}

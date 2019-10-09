@@ -70,7 +70,7 @@ func main() {
 		defer f.Close()
 		dump := dbdump.ParseDump(f)
 		if dump.ID == nil {
-			log.Printf("ignoring: %s", dump)
+			log.Printf("ignoring: %q", dump)
 			return nil
 		}
 		title := strings.ToValidUTF8(dump.Title, "")
