@@ -15,7 +15,6 @@ import (
 	_ "github.com/jackc/pgx/stdlib"
 
 	"github.com/alrs/freedb/dbdump"
-	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
@@ -70,21 +69,17 @@ func main() {
 		}
 		defer f.Close()
 		dump := dbdump.ParseDump(f)
-		if len(dump.ID) < 8 {
-			log.Print(spew.Sdump(dump))
+		if dump.ID == nil {
+			log.Printf("ignoring: %s", dump)
 			return nil
 		}
-		freeID, err := hex.DecodeString(dump.ID[0:8])
-		if err != nil {
-			log.Print(err)
-		}
-
 		title := strings.ToValidUTF8(dump.Title, "")
-		row := insertDisc.QueryRow(freeID, title)
+		row := insertDisc.QueryRow(dump.ID, title)
 		var id int
 		err = row.Scan(&id)
 		if err != nil {
-			log.Fatalf("error inserting disc %s %s to db: %s", string(dump.ID), dump.Title, err)
+			log.Fatalf("error inserting disc %s %s to db: %s",
+				hex.EncodeToString(dump.ID), dump.Title, err)
 		}
 
 		for _, track := range dump.Tracks {
