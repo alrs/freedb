@@ -133,13 +133,14 @@ func extractPosNum(key string) (int, error) {
 func ParseDump(dump io.Reader) *freedb.Disc {
 	disc := freedb.Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
-	disc.ParseErrors = make([]error, 0)
+	disc.Tracks = make([]string, 0, 20)
 
 	decoded, err := charset.NewReader(dump, "")
 	if err != nil {
 		disc.AppendErr(err)
 		return &disc
 	}
+
 	scanner := bufio.NewScanner(decoded)
 	scanner.Scan()
 	// first line should identify the xmcd filetype
@@ -184,7 +185,7 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.AppendErr(err)
 			}
-			disc.Title = disc.Title + kv.value()
+			disc.AppendTitle(kv.value())
 		case trackTitleRxp.Match([]byte(scanner.Text())):
 			// collect track title
 			kv, err := parsePair(scanner.Text())
@@ -195,10 +196,9 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.AppendErr(err)
 			}
-			if len(disc.Tracks) < (pos + 1) {
-				disc.Tracks = append(disc.Tracks, kv.value())
-			} else {
-				disc.Tracks[pos] = disc.Tracks[pos] + kv.value()
+			err = disc.AppendTrack(kv.value(), pos)
+			if err != nil {
+				disc.AppendErr(err)
 			}
 		case discYearRxp.Match([]byte(scanner.Text())):
 			// collect year
