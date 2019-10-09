@@ -175,26 +175,27 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 		return &disc
 	}
 	for scanner.Scan() {
+		text := scanner.Text()
 		switch {
-		case findOffsetRxp.Match([]byte(scanner.Text())):
+		case findOffsetRxp.Match([]byte(text)):
 			// collect offset
-			found, err := parseOffset(scanner.Text())
+			found, err := parseOffset(text)
 			if err != nil {
 				disc.AppendErr(fmt.Errorf("error parsing offset: %s", err))
 			} else {
 				disc.Offsets = append(disc.Offsets, uint32(found))
 			}
-		case findDiscLengthRxp.Match([]byte(scanner.Text())):
+		case findDiscLengthRxp.Match([]byte(text)):
 			// collect duration
-			found := parseDiscLengthRxp.Find([]byte(scanner.Text()))
+			found := parseDiscLengthRxp.Find([]byte(text))
 			intFound, err := strconv.Atoi(string(found))
 			if err != nil {
 				disc.AppendErr(err)
 			}
 			disc.Duration = uint16(intFound)
-		case discIDRxp.Match([]byte(scanner.Text())):
+		case discIDRxp.Match([]byte(text)):
 			// collect disc ID
-			kv, err := parsePair(scanner.Text())
+			kv, err := parsePair(text)
 			if err != nil {
 				disc.AppendErr(err)
 			}
@@ -205,16 +206,16 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.AppendErr(fmt.Errorf("error decoding id to hex: %s", err))
 			}
-		case discTitleRxp.Match([]byte(scanner.Text())):
+		case discTitleRxp.Match([]byte(text)):
 			// collect disc title
-			kv, err := parsePair(scanner.Text())
+			kv, err := parsePair(text)
 			if err != nil {
 				disc.AppendErr(err)
 			}
 			disc.AppendTitle(kv.value())
-		case trackTitleRxp.Match([]byte(scanner.Text())):
+		case trackTitleRxp.Match([]byte(text)):
 			// collect track title
-			kv, err := parsePair(scanner.Text())
+			kv, err := parsePair(text)
 			if err != nil {
 				disc.AppendErr(err)
 			}
@@ -226,9 +227,9 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.AppendErr(err)
 			}
-		case discYearRxp.Match([]byte(scanner.Text())):
+		case discYearRxp.Match([]byte(text)):
 			// collect year
-			found := numRxp.Find([]byte(scanner.Text()))
+			found := numRxp.Find([]byte(text))
 			if string(found) == "" {
 				continue
 			}
@@ -238,9 +239,9 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			}
 			castYear := uint16(year)
 			disc.Year = &castYear
-		case discGenreRxp.Match([]byte(scanner.Text())):
+		case discGenreRxp.Match([]byte(text)):
 			// collect genre
-			kv, err := parsePair(scanner.Text())
+			kv, err := parsePair(text)
 			if err != nil {
 				disc.AppendErr(err)
 			}
