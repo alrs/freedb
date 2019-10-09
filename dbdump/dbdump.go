@@ -33,6 +33,15 @@ var (
 
 type pair [2]string
 
+// Error to return when a dump is not in xmcd format
+type XMCDErr struct {
+}
+
+// XMCDErr message.
+func (e *XMCDErr) Error() string {
+	return "not an xmcd format dump"
+}
+
 func init() {
 	var err error
 	findOffsetRxp, err = regexp.Compile(`^#\s+[0-9]+$`)
@@ -145,7 +154,8 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 	scanner.Scan()
 	// first line should identify the xmcd filetype
 	if !filetypeRxp.Match([]byte(scanner.Text())) {
-		disc.AppendErr(fmt.Errorf("not an xmcd dump file"))
+		var err *XMCDErr
+		disc.AppendErr(err)
 		return &disc
 	}
 	for scanner.Scan() {
