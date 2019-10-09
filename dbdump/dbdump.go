@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alrs/freedb"
+	"golang.org/x/net/html/charset"
 )
 
 var (
@@ -132,7 +133,12 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.ParseErrors = make([]error, 0)
 
-	scanner := bufio.NewScanner(dump)
+	decoded, err := charset.NewReader(dump, "")
+	if err != nil {
+		disc.ParseErrors = append(disc.ParseErrors, err)
+		return &disc
+	}
+	scanner := bufio.NewScanner(decoded)
 	scanner.Scan()
 	// first line should identify the xmcd filetype
 	if !filetypeRxp.Match([]byte(scanner.Text())) {
