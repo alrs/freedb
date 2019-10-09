@@ -1,3 +1,4 @@
+// freedb.org
 package freedb
 
 // Disc represents the parsed output of a freeDB dump
