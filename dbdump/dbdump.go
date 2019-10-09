@@ -137,8 +137,8 @@ func extractPosNum(key string) (int, error) {
 	return strconv.Atoi(string(posFound))
 }
 
-// ParseDump reads a freedb dump file, parses it, and returns the parsed
-// data into a *freedb.Disc.
+// ParseDump reads a freedb dump file, parses it, converts strings to UTF8,
+// and returns the parsed data into a *freedb.Disc.
 func ParseDump(dump io.Reader) *freedb.Disc {
 	disc := freedb.Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
