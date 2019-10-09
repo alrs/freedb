@@ -215,7 +215,10 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.ParseErrors = append(disc.ParseErrors, err)
 			}
-			disc.Genre = kv.value()
+			genre := kv.value()
+			if genre != "" {
+				disc.Genre = &genre
+			}
 		}
 	}
 	return &disc

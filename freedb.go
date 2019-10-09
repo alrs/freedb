@@ -9,8 +9,9 @@ type Disc struct {
 	// Title is the combined artist name and release name of a compact disc.
 	Title string
 
-	// Genre represents the genre of music found on a compact disc.
-	Genre string
+	// Genre is an optional field that represents the genre of music found
+	// on a compact disc.
+	Genre *string
 
 	// Year is an optional field denoting the release year of a compact disc.
 	Year *uint16
