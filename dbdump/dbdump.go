@@ -2,6 +2,7 @@ package dbdump
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
@@ -167,7 +168,13 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if err != nil {
 				disc.ParseErrors = append(disc.ParseErrors, err)
 			}
-			disc.ID = kv.value()
+			if len(kv.value()) < 8 {
+				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("discID too short"))
+			}
+			disc.ID, err = hex.DecodeString(kv.value()[0:8])
+			if err != nil {
+				disc.ParseErrors = append(disc.ParseErrors, fmt.Errorf("error decoding id to hex: %s", err))
+			}
 		} else if discTitleRxp.Match([]byte(scanner.Text())) {
 			// collect disc title
 			kv, err := parsePair(scanner.Text())

@@ -1,6 +1,7 @@
 package dbdump
 
 import (
+	"encoding/hex"
 	"os"
 	"reflect"
 	"testing"
@@ -67,4 +68,19 @@ func TestParseDump(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(spew.Sdump(disc))
+}
+
+func TestHex(t *testing.T) {
+	id := "7908090a"
+	f, err := os.Open(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disc := ParseDump(f)
+	tmpl := "expected:%s got:%s"
+	enc := hex.EncodeToString(disc.ID)
+	if id != enc {
+		t.Fatalf(tmpl, id, enc)
+	}
+	t.Logf(tmpl, id, enc)
 }

@@ -3,8 +3,8 @@ package freedb
 // Disc represents the parsed output of a freeDB dump
 type Disc struct {
 	// ID is a non-unique algorithmically-generated hash identifying a compact
-	// disc.
-	ID string
+	// disc stored in hexidecimal.
+	ID []uint8
 
 	// Title is the combined artist name and release name of a compact disc.
 	Title string
