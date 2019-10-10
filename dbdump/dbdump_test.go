@@ -3,8 +3,11 @@ package dbdump
 import (
 	"encoding/hex"
 	"os"
+	"path"
 	"reflect"
 	"testing"
+
+	"github.com/alrs/freedb"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -58,21 +61,9 @@ func TestExtractPosNumber(t *testing.T) {
 	t.Logf(logTmpl, expected, got)
 }
 
-func TestParseDump(t *testing.T) {
-	f, err := os.Open("7908090a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	disc := ParseDump(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(spew.Sdump(disc))
-}
-
 func TestHex(t *testing.T) {
-	id := "7908090a"
-	f, err := os.Open(id)
+	id := "decafbad"
+	f, err := os.Open(path.Join("test", id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,4 +74,39 @@ func TestHex(t *testing.T) {
 		t.Fatalf(tmpl, id, enc)
 	}
 	t.Logf(tmpl, id, enc)
+}
+
+func TestParseDump(t *testing.T) {
+	testDump := "decafbad"
+	f, err := os.Open(path.Join("test", testDump))
+	if err != nil {
+		t.Fatal(err)
+	}
+	disc := ParseDump(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exID, err := hex.DecodeString(testDump)
+	exGenre := "Math Rock"
+	exYear := uint16(2005)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := &freedb.Disc{
+		ID:       exID,
+		Genre:    &exGenre,
+		Year:     &exYear,
+		Title:    "The Nameless Faceless Many / dot dot E.P.",
+		Offsets:  []uint32{100, 200, 60000},
+		Duration: uint16(2000),
+		Tracks: []string{
+			"Introduction",
+			"So Long That It Wraps Around",
+		},
+	}
+	tmpl := "expected:%s got:%s"
+	if !reflect.DeepEqual(expected, disc) {
+		t.Fatalf(tmpl, spew.Sdump(expected), spew.Sdump(disc))
+	}
+	t.Log(spew.Sdump(disc))
 }
