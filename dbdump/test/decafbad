@@ -1,0 +1,16 @@
+# xmcd dump
+#
+# Track frame offsets:
+#	100
+#	200
+#	60000
+#
+# Disc length: 2000 seconds
+#
+DISCID=decafbad
+DTITLE=The Nameless Faceless Many / dot dot E.P.
+DYEAR=2005
+DGENRE=Math Rock
+TTITLE0=Introduction
+TTITLE1=So Long That It 
+TTITLE1=Wraps Around
