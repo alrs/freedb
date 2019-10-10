@@ -25,13 +25,29 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	// blank import of pgx for database/sql driver
 	_ "github.com/jackc/pgx/stdlib"
 
 	"github.com/alrs/freedb/dbdump"
 )
+
+func openDB(u url.URL) (*sql.DB, error) {
+	db, err := sql.Open("pgx", u.String())
+	if err != nil {
+		return db, fmt.Errorf("error connecting to database: %s")
+	}
+	return db, nil
+}
+
+func prepareStatement(tx *sql.Tx, template string) (*sql.Stmt, error) {
+	insert, err := tx.Prepare(template)
+	if err != nil {
+		return insert, fmt.Errorf("error templating sql statement %s: %s",
+			template, err)
+	}
+	return insert, nil
+}
 
 func main() {
 	var user, password, host, dbName, dumpPath string
@@ -52,9 +68,9 @@ func main() {
 		Path:   dbName,
 	}
 
-	db, err := sql.Open("pgx", pgURI.String())
+	db, err := openDB(pgURI)
 	if err != nil {
-		log.Fatalf("error connecting to database: %v", err)
+		log.Fatal(err)
 	}
 	defer db.Close()
 
@@ -63,18 +79,20 @@ func main() {
 		log.Fatalf("error on Begin(): %s", err)
 	}
 
-	insertDisc, err := tx.Prepare("INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;")
+	insertDisc, err := prepareStatement(tx,
+		"INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;")
 
 	if err != nil {
-		log.Fatalf("error preparing transaction: %v", err)
+		log.Fatal(err)
 	}
 
-	insertTrack, err := tx.Prepare("INSERT INTO tracks (disc_id, title) VALUES ($1, $2);")
+	insertTrack, err := prepareStatement(tx,
+		"INSERT INTO tracks (disc_id, title) VALUES ($1, $2);")
 	if err != nil {
-		log.Fatalf("error preparing track insert transaction: %s", err)
+		log.Fatal(err)
 	}
 
-	walkFunc := func(path string, info os.FileInfo, err error) error {
+	parseFile := func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() || info.Size() < 10 {
 			log.Printf("ignoring: %s", path)
 			return nil
@@ -89,8 +107,7 @@ func main() {
 			log.Printf("ignoring: %s", path)
 			return nil
 		}
-		title := strings.ToValidUTF8(dump.Title, "")
-		row := insertDisc.QueryRow(dump.ID, title)
+		row := insertDisc.QueryRow(dump.ID, dump.Title)
 		var id int
 		err = row.Scan(&id)
 		if err != nil {
@@ -99,7 +116,7 @@ func main() {
 		}
 
 		for _, track := range dump.Tracks {
-			_, err := insertTrack.Exec(id, strings.ToValidUTF8(track, ""))
+			_, err := insertTrack.Exec(id, track)
 			if err != nil {
 				log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
 			}
@@ -107,7 +124,7 @@ func main() {
 		return nil
 	}
 
-	err = filepath.Walk(dumpPath, walkFunc)
+	err = filepath.Walk(dumpPath, parseFile)
 	if err != nil {
 		log.Fatal(err)
 	}
