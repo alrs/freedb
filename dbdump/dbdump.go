@@ -49,7 +49,7 @@ var (
 
 type pair [2]string
 
-// Error to return when a dump is not in xmcd format
+// XMCDErr to return when a dump is not in xmcd format
 type XMCDErr struct {
 }
 

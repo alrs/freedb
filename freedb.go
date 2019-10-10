@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Parse freedb.org dumps and insert into PostgreSQL.
+// Package freedb can parse freedb.org dumps and insert into PostgreSQL.
 package freedb
 
 import (
@@ -25,7 +25,7 @@ import (
 // Disc represents the parsed output of a freeDB dump
 type Disc struct {
 	// ID is a non-unique algorithmically-generated hash identifying a compact
-	// disc stored in hexidecimal.
+	// disc stored in hexadecimal.
 	ID []uint8
 
 	// Title is the combined artist name and release name of a compact disc.
