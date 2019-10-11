@@ -17,15 +17,20 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/bzip2"
 	"database/sql"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/davecgh/go-spew/spew"
 
 	// blank import of pgx for database/sql driver
 	_ "github.com/jackc/pgx/stdlib"
@@ -55,48 +60,6 @@ func prepareStatement(tx *sql.Tx, template string) (*sql.Stmt, error) {
 	return insert, nil
 }
 
-func main() {
-	var user, password, host, dbName, dumpPath string
-	var dbPort int
-
-	flag.StringVar(&user, "user", "", "postgresql username")
-	flag.StringVar(&password, "pass", "", "postgresql password")
-	flag.StringVar(&host, "host", "localhost", "postgresql hostname")
-	flag.StringVar(&dbName, "db", "freedb", "postgresql database name")
-	flag.StringVar(&dumpPath, "dump", "", "path to database dump")
-	flag.IntVar(&dbPort, "port", 5432, "postgresql port number")
-	flag.Parse()
-
-	pgURI := url.URL{
-		Scheme: "postgres",
-		User:   url.UserPassword(user, password),
-		Host:   fmt.Sprintf("%s:%d", host, dbPort),
-		Path:   dbName,
-	}
-
-	db, err := openDB(pgURI)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Fatalf("error on Begin(): %s", err)
-	}
-	err = ingestFromFilesystem(tx, dumpPath)
-	if err != nil {
-		tx.Rollback()
-		log.Fatalf("error ingesting from filesystem: %s", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		log.Fatalf("error commiting database transaction: %s", err)
-	}
-
-}
-
 func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
 	insertDisc, err := prepareStatement(tx, insertDiscStmt)
 	if err != nil {
@@ -110,7 +73,7 @@ func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
 		if info.IsDir() {
 			return nil
 		}
-		if info.Size() < 10 {
+		if info.Size() < 1 {
 			log.Printf("ignoring tiny file: %s", fqp)
 			return nil
 		}
@@ -152,4 +115,137 @@ func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
 	}
 
 	return filepath.Walk(dumpPath, parseFile)
+}
+
+func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
+	if fi.Mode().IsDir() {
+		// don't attempt to parse a directory
+		return nil
+	}
+	for _, fn := range ignoreFiles {
+		if fi.Name() == fn {
+			log.Printf("ignoring blacklist file: %s", fi.Name())
+			return nil
+		}
+	}
+	dump := dbdump.ParseDump(r)
+	if dump.ID == nil {
+		log.Printf("ignoring nil entry %s: %s", fi.Name(), spew.Sdump(dump))
+		return nil
+	}
+
+	row := inserts["disc"].QueryRow(dump.ID, dump.Title)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		return fmt.Errorf("error inserting disc %s %s to db: %s",
+			fi.Name(), dump.Title, err)
+	}
+
+	for _, track := range dump.Tracks {
+		_, err := inserts["track"].Exec(id, track)
+		if err != nil {
+			log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
+		}
+	}
+	return nil
+}
+
+func prepareInserts(tx *sql.Tx) (map[string]*sql.Stmt, error) {
+	var err error
+	inserts := make(map[string]*sql.Stmt)
+	inserts["disc"], err = prepareStatement(tx, insertDiscStmt)
+	if err != nil {
+		return inserts, err
+	}
+	inserts["track"], err = prepareStatement(tx, insertTrackStmt)
+	return inserts, err
+}
+
+func ingestFromTarball(tx *sql.Tx, dumpPath string) error {
+	inserts, err := prepareInserts(tx)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(dumpPath)
+	if err != nil {
+		return err
+	}
+	bz2 := bzip2.NewReader(f)
+	tarball := tar.NewReader(bz2)
+Loop:
+	for {
+		header, err := tarball.Next()
+		switch {
+		case err == io.EOF:
+			break Loop
+		case err != nil:
+			return err
+		default:
+			err := ingest(tarball, header.FileInfo(), inserts)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func main() {
+	var user, password, host, dbName, dumpPath string
+	var dbPort int
+
+	flag.StringVar(&user, "user", "", "postgresql username")
+	flag.StringVar(&password, "pass", "", "postgresql password")
+	flag.StringVar(&host, "host", "localhost", "postgresql hostname")
+	flag.StringVar(&dbName, "db", "freedb", "postgresql database name")
+	flag.StringVar(&dumpPath, "dump", "", "path to database dump")
+	flag.IntVar(&dbPort, "port", 5432, "postgresql port number")
+	flag.Parse()
+
+	pgURI := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, password),
+		Host:   fmt.Sprintf("%s:%d", host, dbPort),
+		Path:   dbName,
+	}
+
+	db, err := openDB(pgURI)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatalf("error on Begin(): %s", err)
+	}
+
+	fi, err := os.Stat(dumpPath)
+	if err != nil {
+		log.Fatal("error determining FileInfo on %s: %s", dumpPath, err)
+	}
+
+	switch mode := fi.Mode(); {
+	case mode.IsDir():
+		// dump has already been decompressed and untarred to filesystem
+		err = ingestFromFilesystem(tx, dumpPath)
+		if err != nil {
+			tx.Rollback()
+			log.Fatalf("error ingesting from filesystem: %s", err)
+		}
+	case mode.IsRegular():
+		// operate directly on bzip2 tarball
+		err = ingestFromTarball(tx, dumpPath)
+		if err != nil {
+			tx.Rollback()
+			log.Fatalf("error ingesting from tarball: %s", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Fatalf("error commiting database transaction: %s", err)
+	}
+
 }
