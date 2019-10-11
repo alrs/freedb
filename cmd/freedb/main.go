@@ -75,13 +75,30 @@ Loop:
 		case err != nil:
 			return err
 		default:
-			err := ingest(tarball, header.FileInfo(), inserts)
+			if ignorable(header.FileInfo()) {
+				continue
+			}
+			err := ingest(tarball, header.Name, inserts)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func ignorable(info os.FileInfo) bool {
+	if info.Mode().IsDir() {
+		// ignore directories
+		return true
+	}
+	for _, fn := range ignoreFiles {
+		if info.Name() == fn {
+			log.Printf("ignoring blacklist file: %s", info.Name())
+			return true
+		}
+	}
+	return false
 }
 
 func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
@@ -91,35 +108,34 @@ func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
 	}
 
 	parseFunc := func(fqp string, info os.FileInfo, err error) error {
+		fi, err := os.Stat(fqp)
+		if err != nil {
+			return err
+		}
+		if ignorable(fi) {
+			return nil
+		}
+
 		f, err := os.Open(fqp)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
-		fi, err := os.Stat(fqp)
-		if err != nil {
-			return err
-		}
-		return ingest(f, fi, inserts)
+
+		return ingest(f, fi.Name(), inserts)
 	}
+
 	return filepath.Walk(dumpPath, parseFunc)
 }
 
-func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
-	if fi.Mode().IsDir() {
-		// don't attempt to parse a directory
-		return nil
-	}
-	for _, fn := range ignoreFiles {
-		if fi.Name() == fn {
-			log.Printf("ignoring blacklist file: %s", fi.Name())
-			return nil
-		}
-	}
+func ingest(r io.Reader, fqp string, inserts map[string]*sql.Stmt) error {
 	dump := dbdump.ParseDump(r)
 	if dump.ID == nil {
-		log.Printf("ignoring nil entry %s: %s", fi.Name(), spew.Sdump(dump))
+		log.Printf("ignoring nil entry %s: %s", fqp, spew.Sdump(dump.ParseErrors))
 		return nil
+	}
+	if len(dump.ParseErrors) > 0 {
+		log.Printf("ignoring entry with ParseErrors %s: %s", fqp, spew.Sdump(dump.ParseErrors))
 	}
 
 	row := inserts["disc"].QueryRow(dump.ID, dump.Title)
@@ -127,7 +143,7 @@ func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
 	err := row.Scan(&id)
 	if err != nil {
 		return fmt.Errorf("error inserting disc %s %s to db: %s",
-			fi.Name(), dump.Title, err)
+			fqp, dump.Title, err)
 	}
 
 	for _, track := range dump.Tracks {
