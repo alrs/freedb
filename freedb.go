@@ -22,11 +22,33 @@ import (
 	"strings"
 )
 
+// These shard names are meaningless and vestigal, but are needed to
+// disambiguate the freedb.org DISCID
+var Shards = []string{
+	"blues",
+	"classical",
+	"country",
+	"data",
+	"folk",
+	"jazz",
+	"misc",
+	"newage",
+	"reggae",
+	"rock",
+	"soundtrack",
+}
+
 // Disc represents the parsed output of a freeDB dump
 type Disc struct {
-	// ID is a non-unique algorithmically-generated hash identifying a compact
-	// disc stored in hexadecimal.
-	ID []uint8
+	// IDs is a list of non-unique algorithmically-generated hashes identifying
+	// a compact disc stored in hexadecimal.
+	IDs [][]uint8
+
+	// Shard is an 8 bit unsigned int that represents the position of the shard
+	// in the Shards slice. These shards look like genre subdirectories, but
+	// that meaning is vestigal. The subdirectories are used as generic shard
+	// buckets to work around ID collisions.
+	Shard uint8
 
 	// Title is the combined artist name and release name of a compact disc.
 	Title string
@@ -79,4 +101,31 @@ func (d *Disc) AppendTrack(s string, pos int) error {
 			pos, len(d.Tracks))
 	}
 	return nil
+}
+
+// ShardErr is the response to an unknown shard name.
+type ShardErr struct {
+	shard string
+}
+
+// Error provides an error string for the ShardErr type.
+func (e *ShardErr) Error() string {
+	return fmt.Sprintf("unknown shard name: %s", e.shard)
+}
+
+// ShardPos returns the shard position of a named shard as well as a ShardErr
+// if the named shard does not exist.
+func ShardPos(name string) (uint8, error) {
+	for i, s := range Shards {
+		if name == s {
+			return uint8(i), nil
+		}
+	}
+	return 0, &ShardErr{name}
+}
+
+// ComposeUID concatenates the non-unique DISCID with the unique shard number
+// to create an actually unique ID.
+func ComposeUID(discID []uint8, shard uint8) []uint8 {
+	return append(discID, uint8(shard))
 }

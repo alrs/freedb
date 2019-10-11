@@ -21,55 +21,28 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
--- Name: discs; Type: TABLE; Schema: public; Owner: lars
+-- Name: discs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.discs (
-    id integer NOT NULL,
-    freedb_id bytea NOT NULL,
+    id bytea NOT NULL,
     title text NOT NULL
 );
 
 
-ALTER TABLE public.discs OWNER TO lars;
-
 --
--- Name: discs_id_seq; Type: SEQUENCE; Schema: public; Owner: lars
---
-
-CREATE SEQUENCE public.discs_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE public.discs_id_seq OWNER TO lars;
-
---
--- Name: discs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: lars
---
-
-ALTER SEQUENCE public.discs_id_seq OWNED BY public.discs.id;
-
-
---
--- Name: tracks; Type: TABLE; Schema: public; Owner: lars
+-- Name: tracks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.tracks (
     id integer NOT NULL,
-    disc_id integer,
-    title text
+    disc_id bytea NOT NULL,
+    title text NOT NULL
 );
 
 
-ALTER TABLE public.tracks OWNER TO lars;
-
 --
--- Name: tracks_id_seq; Type: SEQUENCE; Schema: public; Owner: lars
+-- Name: tracks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.tracks_id_seq
@@ -81,31 +54,22 @@ CREATE SEQUENCE public.tracks_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.tracks_id_seq OWNER TO lars;
-
 --
--- Name: tracks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: lars
+-- Name: tracks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.tracks_id_seq OWNED BY public.tracks.id;
 
 
 --
--- Name: discs id; Type: DEFAULT; Schema: public; Owner: lars
---
-
-ALTER TABLE ONLY public.discs ALTER COLUMN id SET DEFAULT nextval('public.discs_id_seq'::regclass);
-
-
---
--- Name: tracks id; Type: DEFAULT; Schema: public; Owner: lars
+-- Name: tracks id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tracks ALTER COLUMN id SET DEFAULT nextval('public.tracks_id_seq'::regclass);
 
 
 --
--- Name: discs discs_pkey; Type: CONSTRAINT; Schema: public; Owner: lars
+-- Name: discs discs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.discs
@@ -113,11 +77,19 @@ ALTER TABLE ONLY public.discs
 
 
 --
--- Name: tracks tracks_pkey; Type: CONSTRAINT; Schema: public; Owner: lars
+-- Name: tracks tracks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tracks
     ADD CONSTRAINT tracks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tracks tracks_disc_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tracks
+    ADD CONSTRAINT tracks_disc_id_fkey FOREIGN KEY (disc_id) REFERENCES public.discs(id);
 
 
 --
