@@ -20,14 +20,12 @@ import (
 	"archive/tar"
 	"compress/bzip2"
 	"database/sql"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/davecgh/go-spew/spew"
@@ -38,15 +36,12 @@ import (
 	"github.com/alrs/freedb/dbdump"
 )
 
-const insertDiscStmt = "INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;"
-const insertTrackStmt = "INSERT INTO tracks (disc_id, title) VALUES ($1, $2);"
-
 var ignoreFiles = []string{"COPYING", "README"}
 
 func openDB(u url.URL) (*sql.DB, error) {
 	db, err := sql.Open("pgx", u.String())
 	if err != nil {
-		return db, fmt.Errorf("error connecting to database: %s")
+		return db, fmt.Errorf("error connecting to database: %s", err)
 	}
 	return db, nil
 }
@@ -60,61 +55,54 @@ func prepareStatement(tx *sql.Tx, template string) (*sql.Stmt, error) {
 	return insert, nil
 }
 
-func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
-	insertDisc, err := prepareStatement(tx, insertDiscStmt)
+func ingestFromTarball(tx *sql.Tx, dumpPath string) error {
+	inserts, err := prepareInserts(tx)
 	if err != nil {
 		return err
 	}
-	insertTrack, err := prepareStatement(tx, insertTrackStmt)
+	f, err := os.Open(dumpPath)
 	if err != nil {
 		return err
 	}
-	parseFile := func(fqp string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		if info.Size() < 1 {
-			log.Printf("ignoring tiny file: %s", fqp)
-			return nil
-		}
-		for _, fn := range ignoreFiles {
-			_, file := path.Split(fqp)
-			if file == fn {
-				log.Printf("ignoring blacklisted file: %s", fqp)
-				return nil
+	bz2 := bzip2.NewReader(f)
+	tarball := tar.NewReader(bz2)
+Loop:
+	for {
+		header, err := tarball.Next()
+		switch {
+		case err == io.EOF:
+			break Loop
+		case err != nil:
+			return err
+		default:
+			err := ingest(tarball, header.FileInfo(), inserts)
+			if err != nil {
+				return err
 			}
 		}
+	}
+	return nil
+}
 
+func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
+	inserts, err := prepareInserts(tx)
+	if err != nil {
+		return err
+	}
+
+	parseFunc := func(fqp string, info os.FileInfo, err error) error {
 		f, err := os.Open(fqp)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
-
-		dump := dbdump.ParseDump(f)
-		if dump.ID == nil {
-			log.Printf("ignoring nil entry: %s", fqp)
-			return nil
-		}
-
-		row := insertDisc.QueryRow(dump.ID, dump.Title)
-		var id int
-		err = row.Scan(&id)
+		fi, err := os.Stat(fqp)
 		if err != nil {
-			log.Fatalf("error inserting disc %s %s to db: %s",
-				hex.EncodeToString(dump.ID), dump.Title, err)
+			return err
 		}
-
-		for _, track := range dump.Tracks {
-			_, err := insertTrack.Exec(id, track)
-			if err != nil {
-				log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
-			}
-		}
-		return nil
+		return ingest(f, fi, inserts)
 	}
-
-	return filepath.Walk(dumpPath, parseFile)
+	return filepath.Walk(dumpPath, parseFunc)
 }
 
 func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
@@ -153,42 +141,16 @@ func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
 
 func prepareInserts(tx *sql.Tx) (map[string]*sql.Stmt, error) {
 	var err error
+	insertDisc := "INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;"
+	insertTrack := "INSERT INTO tracks (disc_id, title) VALUES ($1, $2);"
+
 	inserts := make(map[string]*sql.Stmt)
-	inserts["disc"], err = prepareStatement(tx, insertDiscStmt)
+	inserts["disc"], err = prepareStatement(tx, insertDisc)
 	if err != nil {
 		return inserts, err
 	}
-	inserts["track"], err = prepareStatement(tx, insertTrackStmt)
+	inserts["track"], err = prepareStatement(tx, insertTrack)
 	return inserts, err
-}
-
-func ingestFromTarball(tx *sql.Tx, dumpPath string) error {
-	inserts, err := prepareInserts(tx)
-	if err != nil {
-		return err
-	}
-	f, err := os.Open(dumpPath)
-	if err != nil {
-		return err
-	}
-	bz2 := bzip2.NewReader(f)
-	tarball := tar.NewReader(bz2)
-Loop:
-	for {
-		header, err := tarball.Next()
-		switch {
-		case err == io.EOF:
-			break Loop
-		case err != nil:
-			return err
-		default:
-			err := ingest(tarball, header.FileInfo(), inserts)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func main() {
@@ -223,7 +185,7 @@ func main() {
 
 	fi, err := os.Stat(dumpPath)
 	if err != nil {
-		log.Fatal("error determining FileInfo on %s: %s", dumpPath, err)
+		log.Fatalf("error determining FileInfo on %s: %s", dumpPath, err)
 	}
 
 	switch mode := fi.Mode(); {
