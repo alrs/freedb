@@ -24,6 +24,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 
 	// blank import of pgx for database/sql driver
@@ -31,6 +32,11 @@ import (
 
 	"github.com/alrs/freedb/dbdump"
 )
+
+const insertDiscStmt = "INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;"
+const insertTrackStmt = "INSERT INTO tracks (disc_id, title) VALUES ($1, $2);"
+
+var ignoreFiles = []string{"COPYING", "README"}
 
 func openDB(u url.URL) (*sql.DB, error) {
 	db, err := sql.Open("pgx", u.String())
@@ -78,35 +84,56 @@ func main() {
 	if err != nil {
 		log.Fatalf("error on Begin(): %s", err)
 	}
-
-	insertDisc, err := prepareStatement(tx,
-		"INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;")
-
+	err = ingestFromFilesystem(tx, dumpPath)
 	if err != nil {
-		log.Fatal(err)
+		tx.Rollback()
+		log.Fatalf("error ingesting from filesystem: %s", err)
 	}
 
-	insertTrack, err := prepareStatement(tx,
-		"INSERT INTO tracks (disc_id, title) VALUES ($1, $2);")
+	err = tx.Commit()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error commiting database transaction: %s", err)
 	}
 
-	parseFile := func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() || info.Size() < 10 {
-			log.Printf("ignoring: %s", path)
+}
+
+func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
+	insertDisc, err := prepareStatement(tx, insertDiscStmt)
+	if err != nil {
+		return err
+	}
+	insertTrack, err := prepareStatement(tx, insertTrackStmt)
+	if err != nil {
+		return err
+	}
+	parseFile := func(fqp string, info os.FileInfo, err error) error {
+		if info.IsDir() {
 			return nil
 		}
-		f, err := os.Open(path)
+		if info.Size() < 10 {
+			log.Printf("ignoring tiny file: %s", fqp)
+			return nil
+		}
+		for _, fn := range ignoreFiles {
+			_, file := path.Split(fqp)
+			if file == fn {
+				log.Printf("ignoring blacklisted file: %s", fqp)
+				return nil
+			}
+		}
+
+		f, err := os.Open(fqp)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
+
 		dump := dbdump.ParseDump(f)
 		if dump.ID == nil {
-			log.Printf("ignoring: %s", path)
+			log.Printf("ignoring nil entry: %s", fqp)
 			return nil
 		}
+
 		row := insertDisc.QueryRow(dump.ID, dump.Title)
 		var id int
 		err = row.Scan(&id)
@@ -124,13 +151,5 @@ func main() {
 		return nil
 	}
 
-	err = filepath.Walk(dumpPath, parseFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
-	}
+	return filepath.Walk(dumpPath, parseFile)
 }
