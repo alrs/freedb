@@ -67,9 +67,13 @@ func TestHex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disc := ParseDump(f)
+	shard, err := freedb.ShardPos("soundtrack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	disc := ParseDump(f, shard)
 	tmpl := "expected:%s got:%s"
-	enc := hex.EncodeToString(disc.ID)
+	enc := hex.EncodeToString(disc.IDs[0])
 	if id != enc {
 		t.Fatalf(tmpl, id, enc)
 	}
@@ -82,18 +86,25 @@ func TestParseDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disc := ParseDump(f)
+	shard, err := freedb.ShardPos("soundtrack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	disc := ParseDump(f, shard)
 	if err != nil {
 		t.Fatal(err)
 	}
 	exID, err := hex.DecodeString(testDump)
+	if err != nil {
+		t.Fatal(err)
+	}
 	exGenre := "Math Rock"
 	exYear := uint16(2005)
 	if err != nil {
 		t.Fatal(err)
 	}
 	expected := &freedb.Disc{
-		ID:       exID,
+		IDs:      [][]uint8{exID},
 		Genre:    &exGenre,
 		Year:     &exYear,
 		Title:    "The Nameless Faceless Many / dot dot E.P.",

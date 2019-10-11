@@ -155,10 +155,11 @@ func extractPosNum(key string) (int, error) {
 
 // ParseDump reads a freedb dump file, parses it, converts strings to UTF8,
 // and returns the parsed data into a *freedb.Disc.
-func ParseDump(dump io.Reader) *freedb.Disc {
+func ParseDump(dump io.Reader, shard uint8) *freedb.Disc {
 	disc := freedb.Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.Tracks = make([]string, 0, 20)
+	disc.IDs = make([][]uint8, 0, 2)
 
 	decoded, err := charset.NewReader(dump, "")
 	if err != nil {
@@ -202,9 +203,14 @@ func ParseDump(dump io.Reader) *freedb.Disc {
 			if len(kv.value()) < 8 {
 				disc.AppendErr(fmt.Errorf("discID too short"))
 			}
-			disc.ID, err = hex.DecodeString(kv.value()[0:8])
-			if err != nil {
-				disc.AppendErr(fmt.Errorf("error decoding id to hex: %s", err))
+			ids := strings.Split(kv.value(), ",")
+			for _, id := range ids {
+				hid, err := hex.DecodeString(id)
+				if err != nil {
+					disc.AppendErr(fmt.Errorf("error decoding id %s to hex: %s", hid, err))
+					continue
+				}
+				disc.IDs = append(disc.IDs, hid)
 			}
 		case discTitleRxp.Match([]byte(text)):
 			// collect disc title

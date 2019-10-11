@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"compress/bzip2"
 	"database/sql"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -27,12 +28,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 
 	// blank import of pgx for database/sql driver
 	_ "github.com/jackc/pgx/stdlib"
 
+	"github.com/alrs/freedb"
 	"github.com/alrs/freedb/dbdump"
 )
 
@@ -87,6 +90,19 @@ Loop:
 	return nil
 }
 
+func extractShardName(fqp string) (string, error) {
+	split := strings.Split(fqp, "/")
+	if len(split) >= 2 {
+		return split[len(split)-2], nil
+	}
+	return "", fmt.Errorf("no shard name in path string: %s", fqp)
+}
+
+func extractID(fqp string) ([]uint8, error) {
+	_, fn := filepath.Split(fqp)
+	return hex.DecodeString(fn)
+}
+
 func ignorable(info os.FileInfo) bool {
 	if info.Mode().IsDir() {
 		// ignore directories
@@ -122,34 +138,42 @@ func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
 		}
 		defer f.Close()
 
-		return ingest(f, fi.Name(), inserts)
+		return ingest(f, fqp, inserts)
 	}
 
 	return filepath.Walk(dumpPath, parseFunc)
 }
 
 func ingest(r io.Reader, fqp string, inserts map[string]*sql.Stmt) error {
-	dump := dbdump.ParseDump(r)
-	if dump.ID == nil {
+	shardName, err := extractShardName(fqp)
+	if err != nil {
+		return err
+	}
+	shard, err := freedb.ShardPos(shardName)
+	if err != nil {
+		return err
+	}
+	shortID, err := extractID(fqp)
+	if err != nil {
+		return err
+	}
+	dump := dbdump.ParseDump(r, shard)
+	if dump.IDs == nil {
 		log.Printf("ignoring nil entry %s: %s", fqp, spew.Sdump(dump.ParseErrors))
 		return nil
 	}
 	if len(dump.ParseErrors) > 0 {
 		log.Printf("ignoring entry with ParseErrors %s: %s", fqp, spew.Sdump(dump.ParseErrors))
 	}
-
-	row := inserts["disc"].QueryRow(dump.ID, dump.Title)
-	var id int
-	err := row.Scan(&id)
+	_, err = inserts["disc"].Exec(freedb.ComposeUID(shortID, shard), dump.Title)
 	if err != nil {
 		return fmt.Errorf("error inserting disc %s %s to db: %s",
-			fqp, dump.Title, err)
+			fqp, fqp, err)
 	}
-
 	for _, track := range dump.Tracks {
-		_, err := inserts["track"].Exec(id, track)
+		_, err := inserts["track"].Exec(freedb.ComposeUID(shortID, shard), track)
 		if err != nil {
-			log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
+			log.Fatalf("error inserting track %s from %s: %s", track, fqp, err)
 		}
 	}
 	return nil
@@ -157,7 +181,7 @@ func ingest(r io.Reader, fqp string, inserts map[string]*sql.Stmt) error {
 
 func prepareInserts(tx *sql.Tx) (map[string]*sql.Stmt, error) {
 	var err error
-	insertDisc := "INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;"
+	insertDisc := "INSERT INTO discs (id, title) VALUES ($1, $2);"
 	insertTrack := "INSERT INTO tracks (disc_id, title) VALUES ($1, $2);"
 
 	inserts := make(map[string]*sql.Stmt)
