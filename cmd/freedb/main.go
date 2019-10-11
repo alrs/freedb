@@ -17,14 +17,18 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/bzip2"
 	"database/sql"
-	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/davecgh/go-spew/spew"
 
 	// blank import of pgx for database/sql driver
 	_ "github.com/jackc/pgx/stdlib"
@@ -32,10 +36,12 @@ import (
 	"github.com/alrs/freedb/dbdump"
 )
 
+var ignoreFiles = []string{"COPYING", "README"}
+
 func openDB(u url.URL) (*sql.DB, error) {
 	db, err := sql.Open("pgx", u.String())
 	if err != nil {
-		return db, fmt.Errorf("error connecting to database: %s")
+		return db, fmt.Errorf("error connecting to database: %s", err)
 	}
 	return db, nil
 }
@@ -47,6 +53,104 @@ func prepareStatement(tx *sql.Tx, template string) (*sql.Stmt, error) {
 			template, err)
 	}
 	return insert, nil
+}
+
+func ingestFromTarball(tx *sql.Tx, dumpPath string) error {
+	inserts, err := prepareInserts(tx)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(dumpPath)
+	if err != nil {
+		return err
+	}
+	bz2 := bzip2.NewReader(f)
+	tarball := tar.NewReader(bz2)
+Loop:
+	for {
+		header, err := tarball.Next()
+		switch {
+		case err == io.EOF:
+			break Loop
+		case err != nil:
+			return err
+		default:
+			err := ingest(tarball, header.FileInfo(), inserts)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func ingestFromFilesystem(tx *sql.Tx, dumpPath string) error {
+	inserts, err := prepareInserts(tx)
+	if err != nil {
+		return err
+	}
+
+	parseFunc := func(fqp string, info os.FileInfo, err error) error {
+		f, err := os.Open(fqp)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		fi, err := os.Stat(fqp)
+		if err != nil {
+			return err
+		}
+		return ingest(f, fi, inserts)
+	}
+	return filepath.Walk(dumpPath, parseFunc)
+}
+
+func ingest(r io.Reader, fi os.FileInfo, inserts map[string]*sql.Stmt) error {
+	if fi.Mode().IsDir() {
+		// don't attempt to parse a directory
+		return nil
+	}
+	for _, fn := range ignoreFiles {
+		if fi.Name() == fn {
+			log.Printf("ignoring blacklist file: %s", fi.Name())
+			return nil
+		}
+	}
+	dump := dbdump.ParseDump(r)
+	if dump.ID == nil {
+		log.Printf("ignoring nil entry %s: %s", fi.Name(), spew.Sdump(dump))
+		return nil
+	}
+
+	row := inserts["disc"].QueryRow(dump.ID, dump.Title)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		return fmt.Errorf("error inserting disc %s %s to db: %s",
+			fi.Name(), dump.Title, err)
+	}
+
+	for _, track := range dump.Tracks {
+		_, err := inserts["track"].Exec(id, track)
+		if err != nil {
+			log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
+		}
+	}
+	return nil
+}
+
+func prepareInserts(tx *sql.Tx) (map[string]*sql.Stmt, error) {
+	var err error
+	insertDisc := "INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;"
+	insertTrack := "INSERT INTO tracks (disc_id, title) VALUES ($1, $2);"
+
+	inserts := make(map[string]*sql.Stmt)
+	inserts["disc"], err = prepareStatement(tx, insertDisc)
+	if err != nil {
+		return inserts, err
+	}
+	inserts["track"], err = prepareStatement(tx, insertTrack)
+	return inserts, err
 }
 
 func main() {
@@ -79,58 +183,31 @@ func main() {
 		log.Fatalf("error on Begin(): %s", err)
 	}
 
-	insertDisc, err := prepareStatement(tx,
-		"INSERT INTO discs (freedb_id, title) VALUES ($1, $2) RETURNING id;")
-
+	fi, err := os.Stat(dumpPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error determining FileInfo on %s: %s", dumpPath, err)
 	}
 
-	insertTrack, err := prepareStatement(tx,
-		"INSERT INTO tracks (disc_id, title) VALUES ($1, $2);")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	parseFile := func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() || info.Size() < 10 {
-			log.Printf("ignoring: %s", path)
-			return nil
-		}
-		f, err := os.Open(path)
+	switch mode := fi.Mode(); {
+	case mode.IsDir():
+		// dump has already been decompressed and untarred to filesystem
+		err = ingestFromFilesystem(tx, dumpPath)
 		if err != nil {
-			return err
+			tx.Rollback()
+			log.Fatalf("error ingesting from filesystem: %s", err)
 		}
-		defer f.Close()
-		dump := dbdump.ParseDump(f)
-		if dump.ID == nil {
-			log.Printf("ignoring: %s", path)
-			return nil
-		}
-		row := insertDisc.QueryRow(dump.ID, dump.Title)
-		var id int
-		err = row.Scan(&id)
+	case mode.IsRegular():
+		// operate directly on bzip2 tarball
+		err = ingestFromTarball(tx, dumpPath)
 		if err != nil {
-			log.Fatalf("error inserting disc %s %s to db: %s",
-				hex.EncodeToString(dump.ID), dump.Title, err)
+			tx.Rollback()
+			log.Fatalf("error ingesting from tarball: %s", err)
 		}
-
-		for _, track := range dump.Tracks {
-			_, err := insertTrack.Exec(id, track)
-			if err != nil {
-				log.Fatalf("error inserting track %s from %s: %s", track, dump.ID, err)
-			}
-		}
-		return nil
-	}
-
-	err = filepath.Walk(dumpPath, parseFile)
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error commiting database transaction: %s", err)
 	}
+
 }
