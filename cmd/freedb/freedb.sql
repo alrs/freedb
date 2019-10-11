@@ -21,7 +21,7 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
--- Name: discs; Type: TABLE; Schema: public; Owner: lars
+-- Name: discs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.discs (
@@ -30,10 +30,8 @@ CREATE TABLE public.discs (
 );
 
 
-ALTER TABLE public.discs OWNER TO lars;
-
 --
--- Name: tracks; Type: TABLE; Schema: public; Owner: lars
+-- Name: tracks; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.tracks (
@@ -43,10 +41,8 @@ CREATE TABLE public.tracks (
 );
 
 
-ALTER TABLE public.tracks OWNER TO lars;
-
 --
--- Name: tracks_id_seq; Type: SEQUENCE; Schema: public; Owner: lars
+-- Name: tracks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.tracks_id_seq
@@ -58,24 +54,22 @@ CREATE SEQUENCE public.tracks_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.tracks_id_seq OWNER TO lars;
-
 --
--- Name: tracks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: lars
+-- Name: tracks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.tracks_id_seq OWNED BY public.tracks.id;
 
 
 --
--- Name: tracks id; Type: DEFAULT; Schema: public; Owner: lars
+-- Name: tracks id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tracks ALTER COLUMN id SET DEFAULT nextval('public.tracks_id_seq'::regclass);
 
 
 --
--- Name: discs discs_pkey; Type: CONSTRAINT; Schema: public; Owner: lars
+-- Name: discs discs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.discs
@@ -83,7 +77,7 @@ ALTER TABLE ONLY public.discs
 
 
 --
--- Name: tracks tracks_pkey; Type: CONSTRAINT; Schema: public; Owner: lars
+-- Name: tracks tracks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tracks
@@ -91,7 +85,7 @@ ALTER TABLE ONLY public.tracks
 
 
 --
--- Name: tracks tracks_disc_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: lars
+-- Name: tracks tracks_disc_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tracks
