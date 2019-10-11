@@ -160,6 +160,7 @@ func ParseDump(dump io.Reader, shard uint8) *freedb.Disc {
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.Tracks = make([]string, 0, 20)
 	disc.IDs = make([][]uint8, 0, 2)
+	disc.Shard = shard
 
 	decoded, err := charset.NewReader(dump, "")
 	if err != nil {

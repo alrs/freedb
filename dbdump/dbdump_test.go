@@ -105,6 +105,7 @@ func TestParseDump(t *testing.T) {
 	}
 	expected := &freedb.Disc{
 		IDs:      [][]uint8{exID},
+		Shard:    10,
 		Genre:    &exGenre,
 		Year:     &exYear,
 		Title:    "The Nameless Faceless Many / dot dot E.P.",
