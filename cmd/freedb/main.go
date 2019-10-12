@@ -157,13 +157,10 @@ func ingest(r io.Reader, fqp string, inserts map[string]*sql.Stmt) error {
 	if err != nil {
 		return err
 	}
-	dump := dbdump.ParseDump(r, shard)
-	if dump.IDs == nil {
-		log.Printf("ignoring nil entry %s: %s", fqp, spew.Sdump(dump.ParseErrors))
+	dump, err := dbdump.ParseDump(r, shard)
+	if err != nil {
+		log.Printf("parsing '%s' resulted in error:%s, ignoring %s", fqp, err, spew.Sdump(dump))
 		return nil
-	}
-	if len(dump.ParseErrors) > 0 {
-		log.Printf("ignoring entry with ParseErrors %s: %s", fqp, spew.Sdump(dump.ParseErrors))
 	}
 	_, err = inserts["disc"].Exec(freedb.ComposeUID(shortID, shard), dump.Title)
 	if err != nil {

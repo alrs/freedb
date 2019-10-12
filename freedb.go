@@ -69,17 +69,6 @@ type Disc struct {
 	// Tracks is a slice of strings representing the track titles on a compact
 	// disc.
 	Tracks []string
-
-	// ParseErrors are all of the errors accumulated during parsing of a dump
-	// file.
-	ParseErrors []error
-}
-
-// AppendErr appends a parsing error to a Disc and returns the number of
-// collected errors on the Disc object.
-func (d *Disc) AppendErr(err error) int {
-	d.ParseErrors = append(d.ParseErrors, err)
-	return len(d.ParseErrors)
 }
 
 // AppendTitle appends to the string that represents the compact disc title,
