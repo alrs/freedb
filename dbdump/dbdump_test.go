@@ -71,7 +71,10 @@ func TestHex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disc := ParseDump(f, shard)
+	disc, err := ParseDump(f, shard)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tmpl := "expected:%s got:%s"
 	enc := hex.EncodeToString(disc.IDs[0])
 	if id != enc {
@@ -90,7 +93,7 @@ func TestParseDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disc := ParseDump(f, shard)
+	disc, err := ParseDump(f, shard)
 	if err != nil {
 		t.Fatal(err)
 	}
