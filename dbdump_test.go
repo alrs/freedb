@@ -1,4 +1,4 @@
-package dbdump
+package freedb
 
 import (
 	"encoding/hex"
@@ -6,8 +6,6 @@ import (
 	"path"
 	"reflect"
 	"testing"
-
-	"github.com/alrs/freedb"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -67,7 +65,7 @@ func TestHex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shard, err := freedb.ShardPos("soundtrack")
+	shard, err := ShardPos("soundtrack")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +87,7 @@ func TestParseDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shard, err := freedb.ShardPos("soundtrack")
+	shard, err := ShardPos("soundtrack")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +104,7 @@ func TestParseDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := &freedb.Disc{
+	expected := &Disc{
 		IDs:      [][]uint8{exID},
 		Shard:    10,
 		Genre:    &exGenre,

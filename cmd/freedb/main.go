@@ -36,7 +36,6 @@ import (
 	_ "github.com/jackc/pgx/stdlib"
 
 	"github.com/alrs/freedb"
-	"github.com/alrs/freedb/dbdump"
 )
 
 var ignoreFiles = []string{"COPYING", "README"}
@@ -157,7 +156,7 @@ func ingest(r io.Reader, fqp string, inserts map[string]*sql.Stmt) error {
 	if err != nil {
 		return err
 	}
-	dump, err := dbdump.ParseDump(r, shard)
+	dump, err := freedb.ParseDump(r, shard)
 	if err != nil {
 		log.Printf("parsing '%s' resulted in error:%s, ignoring %s", fqp, err, spew.Sdump(dump))
 		return nil
