@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package dbdump
+package freedb
 
 import (
 	"bufio"
@@ -24,8 +24,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/alrs/freedb"
 )
 
 var (
@@ -140,8 +138,8 @@ func extractPosNum(key string) (int, error) {
 
 // ParseDump reads a freedb dump file, parses it, converts strings to UTF8,
 // and returns the parsed data into a *freedb.Disc.
-func ParseDump(dump io.Reader, shard uint8) (*freedb.Disc, error) {
-	disc := freedb.Disc{}
+func ParseDump(dump io.Reader, shard uint8) (*Disc, error) {
+	disc := Disc{}
 	disc.Offsets = make([]uint32, 0, 20)
 	disc.Tracks = make([]string, 0, 20)
 	disc.IDs = make([][]uint8, 0, 2)
